@@ -274,8 +274,10 @@ int main(int argc, char** argv)
 
     std::shared_ptr<void> sScriptMgrHandle(nullptr, [](void*)
     {
+        LOG_INFO("server.worldserver", "Shutdown: unloading scripts...");
         sScriptMgr->Unload();
         //sScriptReloadMgr->Unload();
+        LOG_INFO("server.worldserver", "Shutdown: scripts unloaded.");
     });
 
     LOG_INFO("server.loading", "Initializing Scripts...");
@@ -317,10 +319,15 @@ int main(int argc, char** argv)
     std::shared_ptr<void> mapManagementHandle(nullptr, [](void*)
     {
         // unload battleground templates before different singletons destroyed
+        LOG_INFO("server.worldserver", "Shutdown: unloading battlegrounds...");
         sBattlegroundMgr->DeleteAllBattlegrounds();
 
+        LOG_INFO("server.worldserver", "Shutdown: unloading outdoor PvP...");
         sOutdoorPvPMgr->Die();                     // unload it before MapMgr
+
+        LOG_INFO("server.worldserver", "Shutdown: unloading all maps...");
         sMapMgr->UnloadAll();                      // unload all grids (including locked in memory)
+        LOG_INFO("server.worldserver", "Shutdown: all maps unloaded.");
 
         sScriptMgr->OnAfterUnloadAllMaps();
     });
@@ -339,7 +346,9 @@ int main(int argc, char** argv)
         soapThread.reset(new std::thread(ACSoapThread, sConfigMgr->GetOption<std::string>("SOAP.IP", "127.0.0.1"), uint16(sConfigMgr->GetOption<int32>("SOAP.Port", 7878))),
             [](std::thread* thr)
         {
+            LOG_INFO("server.worldserver", "Shutdown: waiting for SOAP thread to join...");
             thr->join();
+            LOG_INFO("server.worldserver", "Shutdown: SOAP thread joined.");
             delete thr;
         });
     }
@@ -366,14 +375,20 @@ int main(int argc, char** argv)
 
     std::shared_ptr<void> sWorldSocketMgrHandle(nullptr, [](void*)
     {
+        LOG_INFO("server.worldserver", "Shutdown: kicking all sessions...");
         sWorldSessionMgr->KickAll();         // save and kick all players
         sWorldSessionMgr->UpdateSessions(1); // real players unload required UpdateSessions call
 
+        LOG_INFO("server.worldserver", "Shutdown: stopping world network...");
         sWorldSocketMgr.StopNetwork();
 
         ///- Clean database before leaving
         if (!sToCloud9Sidecar->ClusterModeEnabled())
+        {
+            LOG_INFO("server.worldserver", "Shutdown: clearing online accounts...");
             ClearOnlineAccounts();
+        }
+        LOG_INFO("server.worldserver", "Shutdown: sessions and network stopped.");
     });
 
     // Set server online (allow connecting now)
@@ -495,6 +510,8 @@ bool StartDB()
 
 void StopDB()
 {
+    LOG_INFO("server.worldserver", "Shutdown: closing databases...");
+
     CharacterDatabase.Close();
     WorldDatabase.Close();
     LoginDatabase.Close();
